@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use futures::{pin_mut, StreamExt};
-use lights_broadlink::discover;
+use lights_broadlink::{discover, Color};
 use smol::block_on;
 
 fn main() {
@@ -18,6 +18,9 @@ fn main() {
         }
         let light = light.unwrap();
         let mut connection = light.connect().await.unwrap();
-        connection.set_color([255, 0, 255]).await.unwrap();
+        connection.set_transition_duration(0).await.unwrap();
+        connection.set_brightness(100).await.unwrap();
+        connection.set_transition_duration(5000).await.unwrap();
+        connection.set_brightness(0).await.unwrap();
     })
 }

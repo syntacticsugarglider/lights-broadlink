@@ -324,6 +324,27 @@ struct RgbMessage {
     blue: u8,
 }
 
+#[derive(Serialize)]
+struct WhiteMessage {
+    bulb_colormode: u8,
+}
+
+#[derive(Serialize)]
+struct BrightnessMessage {
+    brightness: u8,
+}
+
+#[derive(Serialize)]
+struct TransitionDurationMessage {
+    transitionduration: u16,
+}
+
+#[derive(Clone, Copy)]
+pub enum Color {
+    White,
+    Rgb { red: u8, green: u8, blue: u8 },
+}
+
 fn encode_message<T: Serialize>(data: &T, flag: u8) -> Result<Vec<u8>, Error> {
     let json = serde_json::to_string(data)?;
     let mut message = vec![0u8; 14];
@@ -413,19 +434,52 @@ impl Connection {
         check(&response)?;
         Ok(())
     }
-    pub async fn set_color(&mut self, color: [u8; 3]) -> Result<(), Error> {
+    pub async fn set_transition_duration(&mut self, duration: u32) -> Result<(), Error> {
         let response = self
             .send_packet(
                 Command::Control,
                 &encode_message(
-                    &RgbMessage {
-                        red: color[0],
-                        green: color[1],
-                        blue: color[2],
-                        bulb_colormode: 0,
+                    &TransitionDurationMessage {
+                        transitionduration: duration as u16,
                     },
                     2,
                 )?,
+            )
+            .await?;
+        check(&response)?;
+        Ok(())
+    }
+    pub async fn set_brightness(&mut self, brightness: u8) -> Result<(), Error> {
+        let response = self
+            .send_packet(
+                Command::Control,
+                &encode_message(
+                    &BrightnessMessage {
+                        brightness: ((brightness as f32 / 255.) * 100.) as u8,
+                    },
+                    2,
+                )?,
+            )
+            .await?;
+        check(&response)?;
+        Ok(())
+    }
+    pub async fn set_color(&mut self, color: Color) -> Result<(), Error> {
+        let response = self
+            .send_packet(
+                Command::Control,
+                &match color {
+                    Color::Rgb { red, green, blue } => encode_message(
+                        &RgbMessage {
+                            red,
+                            green,
+                            blue,
+                            bulb_colormode: 0,
+                        },
+                        2,
+                    ),
+                    Color::White => encode_message(&WhiteMessage { bulb_colormode: 1 }, 2),
+                }?,
             )
             .await?;
         check(&response)?;
