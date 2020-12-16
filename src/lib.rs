@@ -14,6 +14,7 @@ use aes::Aes128;
 use block_modes::{block_padding::NoPadding, BlockModeError};
 use block_modes::{BlockMode, Cbc};
 use rand::{thread_rng, Rng};
+use smol_timeout::TimeoutExt;
 
 type Aes128Cbc = Cbc<Aes128, NoPadding>;
 
@@ -129,6 +130,24 @@ impl DiscoveryPacket {
 
 const DEVTYPE: u16 = 0x60C8;
 
+macro_rules! timeout {
+    ($fut:expr) => {
+        match $fut.timeout(Duration::from_millis(1000)).await {
+            Some(value) => value,
+            None => continue,
+        }
+    };
+    ($fut:expr, $or:block) => {
+        match $fut.timeout(Duration::from_millis(1000)).await {
+            Some(value) => value,
+            None => {
+                $or;
+                continue;
+            }
+        }
+    };
+}
+
 pub fn discover() -> impl Stream<Item = Result<Light, Error>> {
     let local_addr = match local_addr() {
         Ok(addr) => addr,
@@ -153,10 +172,12 @@ pub fn discover() -> impl Stream<Item = Result<Light, Error>> {
             move |(socket, mut discovered)| async move {
                 let socket = socket?;
                 async {
+                    socket.send_to(&packet, broadcast_addr).await?;
                     loop {
-                        socket.send_to(&packet, broadcast_addr).await?;
                         let mut buffer = [0u8; 1024];
-                        let (_, addr) = socket.recv_from(&mut buffer).await?;
+                        let (_, addr) = timeout!(socket.recv_from(&mut buffer), {
+                            socket.send_to(&packet, broadcast_addr).await?;
+                        })?;
                         let devtype = u16::from_le_bytes(buffer[0x34..=0x35].try_into().unwrap());
                         let name = String::from_utf8(
                             buffer[0x40..]
@@ -177,7 +198,6 @@ pub fn discover() -> impl Stream<Item = Result<Light, Error>> {
                                 mac,
                             }));
                         }
-                        Timer::after(Duration::from_millis(250)).await;
                     }
                 }
                 .await
@@ -394,11 +414,13 @@ impl Connection {
 
         let packet_sum = sum(&packet).to_le_bytes();
         packet[0x20..=0x21].copy_from_slice(&packet_sum);
-
-        self.socket.send_to(&packet, self.addr).await?;
-
         let mut response = vec![0u8; 2048];
-        let (len, _) = self.socket.recv_from(&mut response).await?;
+
+        let (len, _) = loop {
+            self.socket.send_to(&packet, self.addr).await?;
+            break timeout!(self.socket.recv_from(&mut response))?;
+        };
+
         response.truncate(len);
         if len < 0x30 {
             Err(Error::LengthError { got: len })?;
