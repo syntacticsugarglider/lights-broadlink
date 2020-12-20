@@ -25,7 +25,7 @@ use futures::{
 };
 use hex_literal::hex;
 use serde::Serialize;
-use smol::{Async, Timer};
+use smol::Async;
 use std::net::UdpSocket;
 use thiserror::Error;
 
@@ -386,6 +386,9 @@ impl Connection {
         let mut buffer = data.to_vec();
         cipher.decrypt(&mut buffer)?;
         Ok(buffer)
+    }
+    pub fn addr(&self) -> IpAddr {
+        self.addr.ip()
     }
     async fn send_packet(&mut self, command: Command, payload: &[u8]) -> Result<Vec<u8>, Error> {
         let mut packet = vec![0u8; 0x38];

@@ -1,5 +1,3 @@
-use std::net::IpAddr;
-
 use futures::{pin_mut, StreamExt, TryStreamExt};
 use lights_broadlink::discover;
 use smol::block_on;
