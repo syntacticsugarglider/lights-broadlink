@@ -347,6 +347,7 @@ struct RgbMessage {
 #[derive(Serialize)]
 struct WhiteMessage {
     bulb_colormode: u8,
+    colortemp: u32,
 }
 
 #[derive(Serialize)]
@@ -361,7 +362,7 @@ struct TransitionDurationMessage {
 
 #[derive(Clone, Copy)]
 pub enum Color {
-    White,
+    White { temperature: u32 },
     Rgb { red: u8, green: u8, blue: u8 },
 }
 
@@ -386,6 +387,12 @@ impl Connection {
         let mut buffer = data.to_vec();
         cipher.decrypt(&mut buffer)?;
         Ok(buffer)
+    }
+    #[allow(dead_code)]
+    fn decode(&self, data: &[u8]) -> Result<String, Error> {
+        let data = self.decrypt(&data[0x38..])?;
+        let len = u32::from_le_bytes(data[0x0A..0x0E].try_into().unwrap()) as usize;
+        Ok(String::from_utf8(data[0x0E..0x0E + len].to_vec())?)
     }
     pub fn addr(&self) -> IpAddr {
         self.addr.ip()
@@ -503,7 +510,13 @@ impl Connection {
                         },
                         2,
                     ),
-                    Color::White => encode_message(&WhiteMessage { bulb_colormode: 1 }, 2),
+                    Color::White { temperature } => encode_message(
+                        &WhiteMessage {
+                            bulb_colormode: 1,
+                            colortemp: temperature,
+                        },
+                        2,
+                    ),
                 }?,
             )
             .await?;

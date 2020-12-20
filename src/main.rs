@@ -18,13 +18,8 @@ fn main() {
             .await
             .unwrap();
 
-        loop {
-            for light in &mut lights {
-                light.turn_on().await.unwrap();
-            }
-            for light in &mut lights {
-                light.turn_off().await.unwrap();
-            }
+        for light in &mut lights {
+            light.turn_off().await.unwrap();
         }
     })
 }
