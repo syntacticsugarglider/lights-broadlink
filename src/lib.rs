@@ -437,7 +437,9 @@ impl Connection {
         }
 
         let checksum = u16::from_le_bytes(response[0x20..=0x21].try_into().unwrap());
-        let new_sum = sum(&response) - response[0x20] as u16 - response[0x21] as u16;
+        let new_sum = sum(&response)
+            .saturating_sub(response[0x20] as u16)
+            .saturating_sub(response[0x21] as u16);
         if checksum != new_sum {
             Err(Error::ChecksumError {
                 expected: new_sum,
